@@ -53,7 +53,7 @@ class ClientTest(unittest.TestCase):
             self.reply = Reply('accepted', 201)
             client.attempt()
         with self.open() as client:
-            self.now = 220
+            self.now = 280
             client.attempt()
             self.assertEqual(client.pending['key'], key)
             client.acknowledge()

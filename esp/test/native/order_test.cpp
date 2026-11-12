@@ -69,7 +69,7 @@ void logicalIdentityAndRestart() {
   Order beforeAck(m,t);
   assert(beforeAck.begin(scope, installation));
   assert(beforeAck.pending().key == key);
-  assert(beforeAck.attempt(220));  // restart after accepted response: replay
+  assert(beforeAck.attempt(280));  // restart after accepted response: replay
   assert(beforeAck.acknowledge());
   Order afterAck(m,t);
   assert(afterAck.begin(scope, installation));
