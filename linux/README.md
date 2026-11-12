@@ -39,3 +39,5 @@ PYTHONPATH=. python3 -m unittest discover -s tests -v
 ## ライセンス
 
 SDKとサンプルは **[MIT License](../LICENSE)** です。PythonおよびOS側のCA証明書は、それぞれの配布元のライセンスに従います。[外部コンポーネント](../THIRD_PARTY.md)も参照してください。
+
+通信失敗時の再送間隔は60秒から段階的に延ばし、最大1時間にします。サーバーの`Retry-After`が長い場合はそちらを優先します。待機期限と間隔は保存し、長期障害中の通信とフラッシュ書き込みを抑えます。

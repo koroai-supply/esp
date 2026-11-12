@@ -107,7 +107,7 @@ class Client:
                 fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
             except FileNotFoundError:
                 self.journal = dict(version=1, installation=secrets.token_hex(16), sequence=0,
-                                    pending=None, blocked=False, retry_at=0)
+                                    pending=None, blocked=False, retry_at=0, retry_delay=60)
                 self._save()
             else:
                 with os.fdopen(fd) as source:
@@ -123,7 +123,8 @@ class Client:
                 or not isinstance(j.get('installation'), str) or not ID.fullmatch(j['installation'])
                 or type(j.get('sequence')) is not int or not 0 <= j['sequence'] < 2**64
                 or type(j.get('blocked')) is not bool or type(j.get('retry_at')) is not int
-                or j['retry_at'] < 0 or 'pending' not in j):
+                or j['retry_at'] < 0 or type(j.get('retry_delay')) is not int
+                or not 60 <= j['retry_delay'] <= 3600 or 'pending' not in j):
             raise ValueError('invalid journal; stopped')
         p = j['pending']
         if p is not None and (not isinstance(p, dict) or p.get('scope') != self.scope
@@ -182,6 +183,7 @@ class Client:
         self.journal['pending'] = dict(scope=self.scope, jan=jan, qty=qty,
                                       key=f"dash-{self.journal['installation']}-{self.journal['sequence']}")
         self.journal['retry_at'] = 0
+        self.journal['retry_delay'] = 60
         self.accepted = False
         self._save()
         return self.pending['key']
@@ -191,14 +193,16 @@ class Client:
         now = int(self.clock())
         if self.pending is None or self.blocked or self.accepted or now < self.retry_at:
             return None
-        self.journal['retry_at'] = now + 60
+        self.journal['retry_at'] = now + self.journal['retry_delay']
         self._save()
         reply = self.transport(self.pending)
         if reply.outcome not in ('accepted', 'retry', 'blocked'):
             raise ValueError('invalid transport result')
         self.accepted = reply.outcome == 'accepted'
         self.journal['blocked'] = reply.outcome == 'blocked'
-        self.journal['retry_at'] = max(now + 60, int(self.clock()) + max(60, reply.retry_after))
+        self.journal['retry_at'] = max(now + 60, int(self.clock()) + max(self.journal['retry_delay'], reply.retry_after))
+        if reply.outcome == 'retry':
+            self.journal['retry_delay'] = min(3600, self.journal['retry_delay'] * 2)
         self._save()
         return reply
 

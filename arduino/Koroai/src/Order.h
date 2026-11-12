@@ -19,6 +19,7 @@ struct Journal {
   bool hasPending = false;
   bool blocked = false;
   uint64_t retryAt = 0;
+  uint32_t retryDelaySeconds = 60;
   Pending pending;
 };
 enum class Load { Empty, Found, Error };

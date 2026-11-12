@@ -31,3 +31,5 @@ C++共通ロジックの正本は`arduino/Koroai/src/`です。ESP版はそこ�
 このリポジトリのSDK・サンプルは **[MIT License](LICENSE)** です。
 ESP版に同梱するMozillaルート証明書は **[MPL-2.0](esp/certs/LICENSE)** で、[出典・更新手順](esp/certs/README.md)を記載しています。
 ArduinoJson、ArduinoHttpClient、Crypto、各ボードのコアなどの外部依存は、それぞれのライセンスに従います。[依存ライブラリのライセンス](THIRD_PARTY.md)も参照してください。
+
+通信失敗時の再送間隔は60秒から段階的に延ばし、最大1時間にします。サーバーの`Retry-After`が長い場合はそちらを優先します。待機期限と間隔は保存し、長期障害中の通信とフラッシュ書き込みを抑えます。

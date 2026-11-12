@@ -35,3 +35,5 @@ HTTPSはWiFiS3の`WiFiSSLClient`とボードのWi-FiブリッジFWに組み込�
 ## ライセンス
 
 SDKとサンプルは **[MIT License](../LICENSE)** です。依存ライブラリ・ボードコアの条件は[THIRD_PARTY.md](../THIRD_PARTY.md)を参照してください。ESP向けCA証明書はこのArduinoライブラリには同梱しません。
+
+通信失敗時の再送間隔は60秒から段階的に延ばし、最大1時間にします。サーバーの`Retry-After`が長い場合はそちらを優先します。待機期限と間隔は保存し、長期障害中の通信とフラッシュ書き込みを抑えます。

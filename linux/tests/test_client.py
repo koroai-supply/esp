@@ -63,6 +63,21 @@ class ClientTest(unittest.TestCase):
             self.assertTrue(second.endswith('-2'))
         self.assertEqual([p['key'] for p in self.sent], [key]*3)
 
+    def test_backoff_survives_restart(self):
+        with self.open() as client:
+            client.start(JAN)
+            client.attempt()
+        with self.open() as client:
+            self.now = 160
+            client.attempt()
+            self.assertEqual(client.retry_at, 280)
+            self.now = 279
+            self.assertIsNone(client.attempt())
+        with self.open() as client:
+            self.now = 280
+            client.attempt()
+            self.assertEqual(client.retry_at, 520)
+
     def test_process_lock(self):
         with self.open():
             with self.assertRaises(BlockingIOError):

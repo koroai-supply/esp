@@ -135,7 +135,8 @@ void retriesAndRejection() {
   assert(!restart.acknowledge());
   t.response.outcome = Outcome::Rejected;
   t.response.httpStatus = 409;
-  assert(restart.attempt(3780));
+  assert(!restart.attempt(3839));
+  assert(restart.attempt(3840));
   assert(restart.state() == State::Blocked);
   assert(!restart.start(jan));
   Order rejected(m,t);

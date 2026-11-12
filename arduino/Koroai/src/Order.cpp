@@ -68,6 +68,7 @@ bool Order::start(const std::string& jan, unsigned qty) {
   journal_.pending.jan = jan;
   journal_.pending.qty = qty;
   journal_.retryAt = 0;
+  journal_.retryDelaySeconds = 60;
   // A failed write can have an unknown durable outcome. Stop until reboot.
   if (!store_.save(journal_)) { state_ = State::StorageError; return false; }
   state_ = State::Pending;
@@ -76,7 +77,7 @@ bool Order::start(const std::string& jan, unsigned qty) {
 bool Order::attempt(uint64_t nowSeconds) {
   if (state_ != State::Pending || nowSeconds < journal_.retryAt) return false;
   // Persist the retry fence before sending; a reset must not bypass backoff.
-  journal_.retryAt = nowSeconds + 60;
+  journal_.retryAt = nowSeconds + journal_.retryDelaySeconds;
   if (!store_.save(journal_)) { state_ = State::StorageError; return false; }
   reply_ = transport_.send(journal_.pending);
   switch (reply_.outcome) {
@@ -84,7 +85,8 @@ bool Order::attempt(uint64_t nowSeconds) {
     case Outcome::Rejected: journal_.blocked = true; state_ = State::Blocked; break;
     case Outcome::Retry:
     case Outcome::InvalidResponse:
-      journal_.retryAt = std::max(nowSeconds, reply_.completedAtSeconds) + std::max<uint32_t>(60, reply_.retryAfterSeconds);
+      journal_.retryAt = std::max(nowSeconds, reply_.completedAtSeconds) + std::max(journal_.retryDelaySeconds, reply_.retryAfterSeconds);
+      journal_.retryDelaySeconds = std::min<uint32_t>(3600, journal_.retryDelaySeconds * 2);
       break;
   }
   if (!store_.save(journal_)) state_ = State::StorageError;
