@@ -8,6 +8,12 @@ class Bytes {
   virtual ~Bytes() = default;
   virtual uint8_t read(unsigned address) = 0;
   virtual bool write(unsigned address, uint8_t value) = 0;
+  virtual bool writeBlock(unsigned address, const uint8_t* data, unsigned size) {
+    for (unsigned i = 0; i < size; ++i) {
+      if (!write(address+i,data[i]) || read(address+i) != data[i]) return false;
+    }
+    return true;
+  }
 };
 // Two slots must occupy separate erase units. Marker is written last.
 class DurableStore : public Store {
@@ -53,8 +59,9 @@ class DurableStore : public Store {
     uint32_t checksum = crc(record, value.size());
     for (unsigned i = 0; i < 4; ++i) record[11+i] = checksum >> (8*i);
     if (!bytes_.write(base, 0) || bytes_.read(base) != 0) return false;
-    for (unsigned i = 1; i < 15 + value.size(); ++i) {
-      if (!bytes_.write(base+i, record[i]) || bytes_.read(base+i) != record[i]) return false;
+    if (!bytes_.writeBlock(base+1, record+1, 14+value.size())) return false;
+    for (unsigned i = 1; i < 15+value.size(); ++i) {
+      if (bytes_.read(base+i) != record[i]) return false;
     }
     if (!bytes_.write(base, 0xa5) || bytes_.read(base) != 0xa5) return false;
     active_ = slot; generation_ = next;

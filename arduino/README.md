@@ -24,7 +24,7 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:renesas_uno:unor4wifi \
 
 初期化時のnonceとボードのMACアドレスからinstallation IDを作り、保存後はそのIDと注文連番を引き継ぎます。新しい押下だけが連番を進め、同じ注文の再送・再起動は同じキー・JAN・数量を使います。長押しとチャタリングを抑止し、受付後60秒は新しい注文を受け付けません。
 
-EEPROMの0〜1023と4096〜5119バイトをSDK専用に予約します。別の用途で書き込まないでください。2つのスロットを交互に使い、世代番号とCRCを確認してから、最後のコミット印を確定します。書き込み中断は直前の有効な記録から復元し、コミット済みデータが壊れていれば停止します。外部送信は保存成功後だけです。EEPROMの実際の電源断と耐久性は実機での検証が必要です。
+EEPROMの0〜1023と4096〜5119バイトをSDK専用に予約します。別の用途で書き込まないでください。2つのスロットを交互に使い、世代番号とCRCを確認してから、最後のコミット印を確定します。書き込み中断は直前の有効な記録から復元し、コミット済みデータが壊れていれば停止します。書き込みはバイトごとの消去を避け、ブロック単位でまとめます。外部送信は保存成功後だけです。EEPROMの実際の電源断と耐久性は実機での検証が必要です。
 
 HTTPSはWiFiS3の`WiFiSSLClient`とボードのWi-FiブリッジFWに組み込まれたCAバンドルを使います。Wi-Fi FWを更新し、[Arduino公式SSLサンプル](https://github.com/arduino/ArduinoCore-renesas/blob/main/libraries/WiFiS3/examples/WiFiWebClientSSL/WiFiWebClientSSL.ino)と同じ証明書検証経路を使ってください。リダイレクトを追跡しません。
 

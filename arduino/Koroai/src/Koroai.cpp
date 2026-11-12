@@ -64,6 +64,7 @@ Reply HttpsTransport::send(const Pending& pending) {
     reply.outcome = Outcome::Rejected;
   }
   http.stop();
+  reply.completedAtSeconds=WiFi.getTime();
   return reply;
 }
 }  // namespace koroai

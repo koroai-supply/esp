@@ -33,6 +33,7 @@ struct Reply {
   Outcome outcome = Outcome::Retry;
   int httpStatus = 0;
   uint32_t retryAfterSeconds = 60;
+  uint64_t completedAtSeconds = 0;
   std::string orderId;
 };
 class Transport {

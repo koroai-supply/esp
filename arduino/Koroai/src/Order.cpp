@@ -84,7 +84,7 @@ bool Order::attempt(uint64_t nowSeconds) {
     case Outcome::Rejected: journal_.blocked = true; state_ = State::Blocked; break;
     case Outcome::Retry:
     case Outcome::InvalidResponse:
-      journal_.retryAt = nowSeconds + std::max<uint32_t>(60, reply_.retryAfterSeconds);
+      journal_.retryAt = std::max(nowSeconds, reply_.completedAtSeconds) + std::max<uint32_t>(60, reply_.retryAfterSeconds);
       break;
   }
   if (!store_.save(journal_)) state_ = State::StorageError;

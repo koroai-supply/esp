@@ -105,6 +105,7 @@ Reply HttpsTransport::send(const Pending& pending) {
     reply.outcome = Outcome::Rejected;
   }
   http.end();
+  reply.completedAtSeconds=time(nullptr);
   return reply;
 }
 }  // namespace koroai

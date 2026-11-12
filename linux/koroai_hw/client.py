@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -55,7 +56,7 @@ class HttpsTransport:
             response = self.opener.open(request, timeout=15)
         except urllib.error.HTTPError as error:
             response = error
-        except (OSError, urllib.error.URLError):
+        except (OSError, urllib.error.URLError, http.client.HTTPException):
             return Reply()
         with response:
             status = response.code
@@ -78,7 +79,7 @@ class HttpsTransport:
                         or data.get('status') not in (('simulated', 'canceled') if mode == 'sandbox' else ('accepted', 'canceled'))):
                     return Reply('retry', status)
                 return Reply('accepted', status, order_id=data['id'])
-            except (ValueError, KeyError, TypeError, OSError):
+            except (ValueError, KeyError, TypeError, OSError, http.client.HTTPException):
                 return Reply('retry', status)
 
 
