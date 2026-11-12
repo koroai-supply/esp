@@ -28,6 +28,7 @@ struct Server : Transport {
     assert(memory.disk.pending.key == p.key);
     assert(memory.disk.pending.jan == p.jan);
     assert(memory.disk.pending.qty == p.qty);
+    assert(memory.disk.pending.quick == p.quick);
     requests.push_back(p);
     return response;
   }
@@ -144,6 +145,53 @@ void retriesAndRejection() {
   assert(!rejected.attempt(5000));
   assert(m.disk.hasPending);
 }
+void quickOrder() {
+  Memory m; Server t(m); Order o(m,t);
+  assert(o.begin(scope,installation));
+  assert(o.startQuick());
+  assert(!o.startQuick());  // pending: a held or repeated press is ignored
+  assert(!o.start(jan));
+  const auto key = o.pending().key;
+  assert(key == "dash-" + installation + "-1");
+  assert(o.pending().quick && o.pending().jan.empty() && o.pending().qty == 1);
+  assert(o.attempt(100));  // lost response: same key again after restart
+  Order reboot(m,t);
+  assert(reboot.begin(scope,installation));
+  assert(reboot.pending().quick && reboot.pending().key == key);
+  t.response.outcome = Outcome::Accepted;
+  t.response.httpStatus = 201;
+  assert(reboot.attempt(160));
+  assert(reboot.acknowledge());
+  // quick_order_not_set: no order was made, so drop the event and return to idle.
+  assert(reboot.startQuick());
+  assert(reboot.pending().key == "dash-" + installation + "-2");
+  t.response.outcome = Outcome::NotSet;
+  t.response.httpStatus = 422;
+  assert(reboot.attempt(200));
+  assert(reboot.state() == State::Idle && !m.disk.hasPending && !m.disk.blocked);
+  assert(m.disk.retryAt == 0 && m.disk.retryDelaySeconds == 60);
+  assert(reboot.startQuick());  // the next press is a new event, never key 2 again
+  assert(reboot.pending().key == "dash-" + installation + "-3");
+  assert(t.requests.size() == 3);
+  for (const auto& p : t.requests) assert(p.quick && p.jan.empty() && p.qty == 1);
+  // NotSet is only meaningful for a quick order; a JAN order stops instead.
+  Memory n; Server u(n); Order j(n,u);
+  assert(j.begin(scope,installation) && j.start(jan));
+  u.response.outcome = Outcome::NotSet;
+  u.response.httpStatus = 422;
+  assert(j.attempt(100));
+  assert(j.state() == State::Blocked && n.disk.blocked && n.disk.hasPending);
+  // A corrupted quick record (JAN or qty present) fails closed.
+  Memory c; Server v(c); Order q(c,v);
+  assert(q.begin(scope,installation) && q.startQuick());
+  c.disk.pending.qty = 2;
+  Order corrupt(c,v);
+  assert(!corrupt.begin(scope,installation));
+  c.disk.pending.qty = 1;
+  c.disk.pending.jan = jan;
+  Order corrupt2(c,v);
+  assert(!corrupt2.begin(scope,installation));
+}
 void buttonEdges() {
   Button held;
   assert(!held.pressed(true, 0));
@@ -168,6 +216,6 @@ void buttonEdges() {
 int main() {
   buttonEdges();
   validation(); logicalIdentityAndRestart(); storageFailures();
-  scopeAndCorruption(); retriesAndRejection();
-  std::cout << "注文の冪等性・復旧・保存失敗・再送制限のテスト成功\n";
+  scopeAndCorruption(); retriesAndRejection(); quickOrder();
+  std::cout << "クイック注文・注文の冪等性・復旧・保存失敗・再送制限のテスト成功\n";
 }

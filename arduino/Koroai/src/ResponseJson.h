@@ -20,11 +20,20 @@ inline Reply parseAccepted(const char* body, const Pending& pending, bool sandbo
   if (!body || strlen(body) > 4096 || deserializeJson(doc, body)) return reply;
   JsonVariant data = doc["data"];
   if (!data["id"].is<const char*>() || !validUuid(data["id"].as<const char*>()) ||
-      !(data["mode"] == (sandbox ? "sandbox" : "live")) || !(data["jan"] == pending.jan) ||
+      !(data["mode"] == (sandbox ? "sandbox" : "live")) || !data["jan"].is<const char*>() ||
+      // A quick order's product is chosen by the server; accept any valid JAN.
+      !(pending.quick ? validJan(data["jan"].as<std::string>()) : data["jan"] == pending.jan) ||
       !data["qty"].is<unsigned>() || data["qty"].as<unsigned>() != pending.qty ||
       !(data["status"] == (sandbox ? "simulated" : "accepted") || data["status"] == "canceled")) return reply;
   reply.outcome = Outcome::Accepted;
   reply.orderId = data["id"].as<std::string>();
+  reply.jan = data["jan"].as<std::string>();
   return reply;
+}
+// True only for {"error":"quick_order_not_set"} (HTTP 422 of POST /v1/quick-order).
+inline bool quickOrderNotSet(const char* body) {
+  JsonDocument doc;
+  if (!body || strlen(body) > 4096 || deserializeJson(doc, body)) return false;
+  return doc["error"] == "quick_order_not_set";
 }
 }  // namespace koroai

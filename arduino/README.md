@@ -1,6 +1,6 @@
 # Arduino SDK — UNO R4 WiFi
 
-Arduino UNO R4 WiFi用のダッシュボタンSDKです。外付けボタンをD2とGNDの間に接続し、1回押すと1パッケージを注文します。ESP32用のSDKは[../esp/](../esp/README.md)です。
+Arduino UNO R4 WiFi用のダッシュボタンSDKです。外付けボタンをD2とGNDの間に接続し、1回押すとホームのクイック注文の商品（`JAN`を設定した場合はその商品）を1パッケージ注文します。ESP32用のSDKは[../esp/](../esp/README.md)です。
 
 Arduino CLI 1.6.0またはArduino IDEと、Renesas UNO R4 Boards 1.6.0を使います。
 
@@ -11,7 +11,7 @@ arduino-cli lib install ArduinoJson@7.4.2 ArduinoHttpClient@0.6.1 Crypto@0.4.0
 python3 arduino/configure.py
 ```
 
-リポジトリのルートで実行してください。生成した`arduino/Koroai/examples/DashButton/dash_config.h`の`SSID`、`PW`、`API_KEY`、`JAN`の4項目を編集します。自動生成の`INSTALLATION_NONCE`は編集しません。設定ファイルはGitに含まれません。
+リポジトリのルートで実行してください。生成した`arduino/Koroai/examples/DashButton/dash_config.h`の`SSID`、`PW`、`API_KEY`を編集します。`JAN`は空のままならクイック注文、JAN-8/13を書けばその商品の注文です。自動生成の`INSTALLATION_NONCE`は編集しません。設定ファイルはGitに含まれません。
 
 ```sh
 arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi \
@@ -21,6 +21,8 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:renesas_uno:unor4wifi \
 ```
 
 ポートは環境に合わせて変更します。Arduino IDEでは`arduino/Koroai`をライブラリとして追加し、DashButtonサンプルを開きます。シリアルは115200bps。`kr_test_`でテスト注文、`kr_live_`で実注文です。公開APIは提供開始前で、実機・実APIでの確認は未実施です。
+
+クイック注文の商品はアプリの連携のタブやMCPで設定し、SDKからは変えられません。未設定（`quick_order_not_set`）のときは注文されないため、その押下を取り消して待機に戻り、シリアルに未設定と表示します。60秒後から押し直せます。SDKでは`order.startQuick()`がクイック注文、`order.start(jan)`が商品指定の注文です。
 
 初期化時のnonceとボードのMACアドレスからinstallation IDを作り、保存後はそのIDと注文連番を引き継ぎます。新しい押下だけが連番を進め、同じ注文の再送・再起動は同じキー・JAN・数量を使います。長押しとチャタリングを抑止し、受付後60秒は新しい注文を受け付けません。
 

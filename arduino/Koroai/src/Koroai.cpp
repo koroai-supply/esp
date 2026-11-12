@@ -17,8 +17,7 @@ std::string credentialScope(const char* value) {
 Reply HttpsTransport::send(const Pending& pending) {
   Reply reply;
   if (!apiKey_ || !validKey(apiKey_) || pending.scope != credentialScope(apiKey_) ||
-      !validJan(pending.jan) || pending.qty < 1 || pending.qty > 10 ||
-      !validIdempotencyKey(pending.key)) {
+      !validPending(pending) || !validIdempotencyKey(pending.key)) {
     reply.outcome = Outcome::Rejected;
     return reply;
   }
@@ -26,9 +25,10 @@ Reply HttpsTransport::send(const Pending& pending) {
   HttpClient http(tls, "api.koroai.supply", 443);
   http.setHttpResponseTimeout(15000);
   http.setTimeout(15000);
-  std::string payload = "{\"jan\":\"" + pending.jan + "\",\"qty\":" + std::to_string(pending.qty) + "}";
+  std::string payload = pending.quick ? std::string("{}")
+      : "{\"jan\":\"" + pending.jan + "\",\"qty\":" + std::to_string(pending.qty) + "}";
   http.beginRequest();
-  http.post("/v1/orders");
+  http.post(pending.quick ? "/v1/quick-order" : "/v1/orders");
   http.sendHeader("Authorization", (std::string("Bearer ") + apiKey_).c_str());
   http.sendHeader("Content-Type", "application/json");
   http.sendHeader("Idempotency-Key", pending.key.c_str());
@@ -59,6 +59,12 @@ Reply HttpsTransport::send(const Pending& pending) {
     if (count <= 4096 && contentType.startsWith("application/json") && http.endOfBodyReached()) {
       reply = parseAccepted(body, pending, strncmp(apiKey_, "kr_test_", 8) == 0);
     } else reply.outcome = Outcome::InvalidResponse;
+  } else if (reply.httpStatus == 422 && pending.quick) {
+    // quick_order_not_set means no order was created; any other 422 stops.
+    char body[4098] = {};
+    size_t count = http.readBytes(body, 4097);
+    reply.outcome = count <= 4096 && contentType.startsWith("application/json") &&
+                    quickOrderNotSet(body) ? Outcome::NotSet : Outcome::Rejected;
   } else if (reply.httpStatus > 0 && reply.httpStatus < 500 &&
              reply.httpStatus != 408 && reply.httpStatus != 429) {
     reply.outcome = Outcome::Rejected;

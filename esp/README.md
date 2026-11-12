@@ -1,7 +1,7 @@
 # 頃合 ESP32 SDK
 
 ESP32を頃合のダッシュボタンにするArduino SDKと、標準プロジェクトです。
-`SSID`、`PW`、`API_KEY`、`JAN`の4項目を設定すると、BOOTボタンで1パッケージを注文します。
+`SSID`、`PW`、`API_KEY`を設定すると、BOOTボタンでホームのクイック注文の商品を1パッケージ注文します。`JAN`を設定すればその商品を注文します。
 
 **公開APIは開発中です。** このSDKは[公開API草案 v0.2.0](https://github.com/koroai-supply/api/blob/main/openapi.yaml)に合わせた実装で、実API・実機の動作確認はまだです。
 `kr_test_`はテスト注文、`kr_live_`は実注文です。実注文はホームの月間購入予算に従います。受付は決済・配送の完了を意味しません。
@@ -21,10 +21,13 @@ cp include/dash_config.example.h include/dash_config.h
 #define SSID "Wi-FiのSSID"
 #define PW "Wi-Fiのパスワード"
 #define API_KEY "kr_test_から始まる自分のテスト用キー"
-#define JAN "注文する商品のJANコード"
+#define JAN ""  // 空ならクイック注文。特定の商品はJANコードを書く
 ```
 
-JANは文字列のまま8桁または13桁で指定します。先頭ゼロを保持し、チェックディジットも検証します。数量は標準で1パッケージです。APIキーは所定のprefixと43文字のbase64url部分を持つ形式に限ります。
+`JAN`が空なら、ホームのクイック注文の商品を注文します（`POST /v1/quick-order`、本文は`{}`、数量は常に1）。商品はアプリの連携のタブやMCPで設定し、SDKからは変えられません。未設定のホームでは`quick_order_not_set`（422）が返り、注文はされません。SDKはその押下を取り消して待機に戻し、シリアルに未設定と表示します。60秒後から押し直せます。
+受付時は、サーバーが選んだ商品のJANをシリアルに表示します。
+
+JANを設定する場合は文字列のまま8桁または13桁で指定します。先頭ゼロを保持し、チェックディジットも検証します。数量は標準で1パッケージです。APIキーは所定のprefixと43文字のbase64url部分を持つ形式に限ります。
 設定ファイルはGit管理から除外しています。キーはシリアル出力しません。設定値はファームウェアに含まれるため、ビルド成果物を公開しないでください。
 
 ```sh
@@ -68,13 +71,14 @@ APIキー変更中に未確定注文がある場合も停止します。別ホ�
 
 - `begin(scope, newInstallationId)`：journal復元。IDの候補はjournalがない最初だけ使います。Wi-Fiを有効にした後に`newInstallationId()`を呼びます。
 - `start(jan, qty = 1)`：新しい論理注文を保存。待機中だけ成功し、数量は1〜10。
+- `startQuick()`：ホームのクイック注文の商品を1パッケージ注文する論理注文を保存。冪等キー・再送・押下の扱いは`start`と同じです。`reply().outcome`が`Outcome::NotSet`なら商品が未設定で、注文は作られず待機に戻ります。受付時の`reply().jan`はサーバーが選んだ商品です。
 - `attempt(utcSeconds)`：待機期限を過ぎていれば1回送信。時刻同期後のUTC秒を渡します。
 - `reply()`：HTTPステータス・結果・注文ID。エラー本文や資格情報はログに出しません。
 - `acknowledge()`：正常受付を確認した注文を解除。保存失敗時は停止します。
 
 複数タスクから同時に呼ばず、Arduinoのloopタスクで直列に使います。HTTP/TLS処理は同期式です。省電力・電池駆動・OTA・Wi-Fi設定画面・注文照会/取消APIはこの版の範囲外です。
 
-接続先は`https://api.koroai.supply/v1/orders`に固定しています。CA・ホスト名を検証し、リダイレクトに資格情報を渡しません。Mozillaのルート証明書を同梱するため、利用者によるCA設定は不要です。証明書更新時は`certs/README.md`を参照してください。
+接続先は`https://api.koroai.supply/v1/orders`（クイック注文は`/v1/quick-order`）に固定しています。CA・ホスト名を検証し、リダイレクトに資格情報を渡しません。Mozillaのルート証明書を同梱するため、利用者によるCA設定は不要です。証明書更新時は`certs/README.md`を参照してください。
 
 ## 検証
 

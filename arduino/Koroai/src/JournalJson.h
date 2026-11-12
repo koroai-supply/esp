@@ -17,11 +17,16 @@ inline bool decodeJournal(const char* value, Journal& journal) {
   journal.retryAt = doc["retry_at"].as<uint64_t>();
   journal.retryDelaySeconds = doc["retry_delay"].as<uint32_t>();
   if (journal.hasPending) {
+    // "quick" is absent in journals written before quick orders existed.
+    if (!doc["quick"].isNull() && !doc["quick"].is<bool>()) return false;
+    const bool quick = doc["quick"] | false;
     if (!doc["scope"].is<const char*>() || !doc["key"].is<const char*>() ||
-        !doc["jan"].is<const char*>() || !doc["qty"].is<unsigned>()) return false;
+        (quick ? !doc["jan"].isNull() : !doc["jan"].is<const char*>()) ||
+        !doc["qty"].is<unsigned>()) return false;
     journal.pending.scope = doc["scope"].as<std::string>();
     journal.pending.key = doc["key"].as<std::string>();
-    journal.pending.jan = doc["jan"].as<std::string>();
+    journal.pending.quick = quick;
+    journal.pending.jan = quick ? std::string() : doc["jan"].as<std::string>();
     journal.pending.qty = doc["qty"].as<unsigned>();
   }
   return true;
@@ -38,7 +43,8 @@ inline std::string encodeJournal(const Journal& journal) {
   if (journal.hasPending) {
     doc["scope"] = journal.pending.scope;
     doc["key"] = journal.pending.key;
-    doc["jan"] = journal.pending.jan;
+    if (journal.pending.quick) doc["quick"] = true;
+    else doc["jan"] = journal.pending.jan;
     doc["qty"] = journal.pending.qty;
   }
   std::string value;
