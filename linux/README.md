@@ -6,22 +6,26 @@ Python 3.10以降とOSのCA証明書を使う、追加の実行時依存がな�
 python3 -m venv .venv
 .venv/bin/pip install -e .
 export API_KEY='自分のkr_test_キー'
-export JAN='注文対象のJAN'
+export JAN=''  # 空ならクイック注文。特定の商品はJANを指定
 .venv/bin/koroai-dash
 ```
 
-Enterがダッシュボタンです。1回で1パッケージを注文し、受付後は60秒待ちます。実機のGPIOを使う場合は、押下を検出するプログラムから`Client.start()`を呼び、保持中の連打を抑止してください。
+Enterがダッシュボタンです。1回で1パッケージを注文し、受付後は60秒待ちます。`JAN`が空か未設定なら、ホームのクイック注文の商品を注文します（`POST /v1/quick-order`）。商品はアプリの連携のタブやMCPで設定し、SDKからは変えられません。起動時に`GET /v1/quick-order`で商品名を表示します。未設定のときは注文されないため、その押下を取り消して待機に戻り、未設定と表示します。実機のGPIOを使う場合は、押下を検出するプログラムから`Client.start()`を呼び、保持中の連打を抑止してください。
 
 ```python
 from koroai_hw import Client
 
 with Client(api_key, '/var/lib/koroai-dash') as client:
     if client.pending is None and not client.blocked:
-        client.start(jan)  # 新しい押下のときだけ呼ぶ
+        client.start_quick()  # 新しい押下のときだけ呼ぶ。商品指定はclient.start(jan)
     reply = client.attempt()  # 同じ注文の再送。待機中はNone
     if reply and reply.outcome == 'accepted':
-        client.acknowledge()
+        client.acknowledge()  # reply.janは受け付けた商品
+    elif reply and reply.outcome == 'not_set':
+        ...  # クイック注文の商品が未設定。注文はなく、待機に戻っている
 ```
+
+`HttpsTransport(api_key).quick_order_product()`は、ホームのクイック注文の商品（`jan`・`name`・`unit_price_jpy`・`purchase_unit`）か、未設定なら`None`を返します。注文はしません。
 
 `Client`を開いている間はプロセスロックを保持します。同じ状態ディレクトリで同時起動すると後のプロセスは失敗します。スレッド間でも直列に呼び出してください。
 標準の状態ディレクトリは`~/.local/state/koroai-dash`、変更は`KOROAI_STATE_DIR`で行います。別ディレクトリを指定すると別の端末として扱うため、未確定注文がある状態で切り替えないでください。ローカルの永続ファイルシステムを使い、NFSや揮発ディスクを避けてください。
