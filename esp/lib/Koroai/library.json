@@ -1,0 +1,15 @@
+{
+  "name": "Koroai",
+  "version": "0.1.0",
+  "description": "Koroai ESP32 dash button order SDK",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "dependencies": {
+    "bblanchon/ArduinoJson": "7.4.2"
+  },
+  "license": "MIT"
+}

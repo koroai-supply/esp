@@ -1,0 +1,71 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: bblanchon/ArduinoJson
+          ref: v7.4.2
+          path: build/ArduinoJson
+      - run: |
+          c++ -std=c++11 -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined -Iarduino/Koroai/src arduino/Koroai/src/Order.cpp esp/test/native/order_test.cpp -o build/order_test
+          ./build/order_test
+          c++ -std=c++11 -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined -Iarduino/Koroai/src -Ibuild/ArduinoJson/src tests/codec_test.cpp -o build/codec_test
+          ./build/codec_test
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e linux
+      - run: python -m unittest discover -s linux/tests -v
+  esp:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        board: [esp32dev, esp32s3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio==6.1.19
+      - run: pio run -d esp -e ${{ matrix.board }}
+  arduino:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: '1.6.0'
+      - run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:renesas_uno@1.6.0
+          arduino-cli lib install ArduinoJson@7.4.2 ArduinoHttpClient@0.6.1 Crypto@0.4.0
+          python3 arduino/configure.py
+          arduino-cli compile --fqbn arduino:renesas_uno:unor4wifi --library arduino/Koroai arduino/Koroai/examples/DashButton
+  required-ci:
+    if: always()
+    needs: [native, linux, esp, arduino]
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "$NATIVE" = success && test "$LINUX" = success && test "$ESP" = success && test "$ARDUINO" = success
+        env:
+          NATIVE: ${{ needs.native.result }}
+          LINUX: ${{ needs.linux.result }}
+          ESP: ${{ needs.esp.result }}
+          ARDUINO: ${{ needs.arduino.result }}
