@@ -1,5 +1,8 @@
 #include <Koroai.h>
 #include "dash_config.h"
+#ifndef JAN
+#define JAN ""
+#endif
 
 koroai::EepromBytes bytes;
 koroai::DurableStore store(bytes);
@@ -9,12 +12,14 @@ koroai::Button button;
 bool ready = false;
 uint64_t nextPressAt = 0;
 const int buttonPin = 2;  // External button between D2 and GND.
+// Empty JAN: order the home's quick-order product (set in the app or MCP).
+const bool quick = JAN[0] == '\0';
 
 void setup() {
   Serial.begin(115200);
   pinMode(buttonPin, INPUT_PULLUP);
-  if (!koroai::validKey(API_KEY) || !koroai::validJan(JAN)) {
-    Serial.println("API_KEYとJANを確認してください。");
+  if (!koroai::validKey(API_KEY) || (!quick && !koroai::validJan(JAN))) {
+    Serial.println("API_KEYとJANを確認してください。JANは空にするとクイック注文です。");
     return;
   }
   WiFi.begin(SSID, PW);
@@ -26,7 +31,8 @@ void setup() {
            mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
   std::string id = koroai::credentialScope(device).substr(0,32);
   ready = order.begin(koroai::credentialScope(API_KEY), id);
-  Serial.println(ready ? "D2ボタンで1パッケージ注文。" : "保存注文の確認が必要です。停止しました。");
+  Serial.println(!ready ? "保存注文の確認が必要です。停止しました。"
+                 : quick ? "D2ボタンでホームのクイック注文の商品を1パッケージ注文。" : "D2ボタンで1パッケージ注文。");
   Serial.println(strncmp(API_KEY,"kr_test_",8)==0 ? "sandbox: テスト注文" : "live: 実注文");
 }
 void loop() {
@@ -40,12 +46,16 @@ void loop() {
   uint64_t now = WiFi.getTime();
   if (now < 1735689600) return;
   if (button.pressed(digitalRead(buttonPin)==LOW,millis()) && now>=nextPressAt && order.state()==koroai::State::Idle) {
-    if (!order.start(JAN)) { Serial.println("保存失敗。停止しました。"); ready=false; }
+    if (!(quick ? order.startQuick() : order.start(JAN))) { Serial.println("保存失敗。停止しました。"); ready=false; }
   }
   if (!order.attempt(now)) return;
   Serial.print("注文API: HTTP "); Serial.println(order.reply().httpStatus);
-  if (order.state()==koroai::State::Accepted) {
-    Serial.println("受付済み。決済・配送の完了ではありません。");
+  if (order.reply().outcome==koroai::Outcome::NotSet && order.state()==koroai::State::Idle) {
+    Serial.println("クイック注文の商品が未設定です。注文していません。アプリで設定してから押し直してください。");
+    nextPressAt=WiFi.getTime()+60;
+  } else if (order.state()==koroai::State::Accepted) {
+    Serial.print("受付済み（JAN "); Serial.print(order.reply().jan.c_str());
+    Serial.println("）。決済・配送の完了ではありません。");
     ready=order.acknowledge();
     nextPressAt=WiFi.getTime()+60;
   } else if (order.state()==koroai::State::Blocked || order.state()==koroai::State::StorageError) {

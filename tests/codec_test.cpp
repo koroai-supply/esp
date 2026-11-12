@@ -61,5 +61,28 @@ int main() {
   assert(parseAccepted(accepted,different,true).outcome==Outcome::InvalidResponse);
   assert(parseAccepted("{broken",journal.pending,true).outcome==Outcome::InvalidResponse);
   assert(parseAccepted("{\"data\":{}}",journal.pending,true).outcome==Outcome::InvalidResponse);
-  std::cout << "journal・EEPROM電源断600パターン・成功応答の検証成功\n";
+  // Quick orders: the journal keeps no JAN, and any valid JAN is accepted in the reply.
+  Journal quick=journal;
+  quick.pending.quick=true;
+  quick.pending.jan.clear();
+  auto quickEncoded=encodeJournal(quick);
+  assert(quickEncoded.find("\"jan\"")==std::string::npos);
+  assert(decodeJournal(quickEncoded.c_str(),decoded));
+  assert(decoded.pending.quick && decoded.pending.jan.empty() && decoded.pending.qty==1);
+  assert(decodeJournal(encoded.c_str(),decoded) && !decoded.pending.quick);  // pre-quick journals
+  const char* quickWithJan=R"({"version":1,"installation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"active":true,"blocked":false,"retry_at":0,"retry_delay":60,"scope":"s","key":"k","quick":true,"jan":"4901234567894","qty":1})";
+  assert(!decodeJournal(quickWithJan,decoded));
+  const char* badQuick=R"({"version":1,"installation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"active":true,"blocked":false,"retry_at":0,"retry_delay":60,"scope":"s","key":"k","quick":1,"qty":1})";
+  assert(!decodeJournal(badQuick,decoded));
+  const char* quickAccepted=R"({"data":{"id":"11111111-1111-4111-8111-111111111111","mode":"sandbox","jan":"96385074","qty":1,"status":"simulated"}})";
+  auto quickReply=parseAccepted(quickAccepted,quick.pending,true);
+  assert(quickReply.outcome==Outcome::Accepted && quickReply.jan=="96385074");
+  assert(parseAccepted(quickAccepted,journal.pending,true).outcome==Outcome::InvalidResponse);
+  assert(parseAccepted(R"({"data":{"id":"11111111-1111-4111-8111-111111111111","mode":"sandbox","jan":"96385075","qty":1,"status":"simulated"}})",quick.pending,true).outcome==Outcome::InvalidResponse);
+  assert(parseAccepted(R"({"data":{"id":"11111111-1111-4111-8111-111111111111","mode":"sandbox","jan":"96385074","qty":2,"status":"simulated"}})",quick.pending,true).outcome==Outcome::InvalidResponse);
+  assert(quickOrderNotSet(R"({"error":"quick_order_not_set"})"));
+  assert(!quickOrderNotSet(R"({"error":"product_not_available"})"));
+  assert(!quickOrderNotSet("{broken"));
+  assert(!quickOrderNotSet(""));
+  std::cout << "journal・EEPROM電源断600パターン・成功応答・クイック注文の検証成功\n";
 }

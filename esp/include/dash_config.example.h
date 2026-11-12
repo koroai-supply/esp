@@ -3,4 +3,5 @@
 #define SSID "YOUR_WIFI_SSID"
 #define PW "YOUR_WIFI_PASSWORD"
 #define API_KEY "kr_test_REPLACE_WITH_YOUR_KEY"
-#define JAN "REPLACE_WITH_JAN_8_OR_13"
+// Empty: order the home's quick-order product. Or set a JAN-8/13 string.
+#define JAN ""

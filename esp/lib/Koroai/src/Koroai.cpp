@@ -68,8 +68,8 @@ static uint32_t retrySeconds(const String& value) {
 Reply HttpsTransport::send(const Pending& pending) {
   Reply reply;
   if (!apiKey_ || !validKey(apiKey_) || !rootCa_ || !*rootCa_ ||
-      pending.scope != credentialScope(apiKey_) || !validJan(pending.jan) ||
-      pending.qty < 1 || pending.qty > 10 || !validIdempotencyKey(pending.key)) {
+      pending.scope != credentialScope(apiKey_) || !validPending(pending) ||
+      !validIdempotencyKey(pending.key)) {
     reply.outcome = Outcome::Rejected;
     return reply;
   }
@@ -82,13 +82,15 @@ Reply HttpsTransport::send(const Pending& pending) {
   http.setConnectTimeout(10000);
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  if (!http.begin(tls, "https://api.koroai.supply/v1/orders")) return reply;
+  if (!http.begin(tls, pending.quick ? "https://api.koroai.supply/v1/quick-order"
+                                     : "https://api.koroai.supply/v1/orders")) return reply;
   const char* headers[] = {"Retry-After", "Content-Type"};
   http.collectHeaders(headers, 2);
   http.addHeader("Authorization", String("Bearer ") + apiKey_);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Idempotency-Key", pending.key.c_str());
-  String payload = String("{\"jan\":\"") + pending.jan.c_str() + "\",\"qty\":" + pending.qty + "}";
+  String payload = pending.quick ? String("{}")
+      : String("{\"jan\":\"") + pending.jan.c_str() + "\",\"qty\":" + pending.qty + "}";
   reply.httpStatus = http.POST(payload);
   if (reply.httpStatus == 429) reply.retryAfterSeconds = retrySeconds(http.header("Retry-After"));
   if (reply.httpStatus == 201) {
@@ -99,6 +101,12 @@ Reply HttpsTransport::send(const Pending& pending) {
     } else {
       reply.outcome = Outcome::InvalidResponse;
     }
+  } else if (reply.httpStatus == 422 && pending.quick) {
+    // quick_order_not_set means no order was created; any other 422 stops.
+    ResponseBody response;
+    reply.outcome = http.writeToStream(&response) >= 0 && !response.overflow &&
+                    http.header("Content-Type").startsWith("application/json") &&
+                    quickOrderNotSet(response.body.c_str()) ? Outcome::NotSet : Outcome::Rejected;
   } else if (reply.httpStatus > 0 && reply.httpStatus < 500 &&
              reply.httpStatus != 408 && reply.httpStatus != 429) {
     // Redirects, authentication errors, conflicts and invalid purchases need intervention.
